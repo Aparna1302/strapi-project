@@ -1,0 +1,42 @@
+name: Deploy Strapi
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '14'
+
+    - name: Install dependencies
+      run: yarn install
+
+    - name: Build Strapi
+      run: yarn build
+
+    - name: Deploy to EC2
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        REMOTE_HOST: ec2-16-171-3-18.eu-north-1.compute.amazonaws.com
+        REMOTE_USER: ec2-user
+      run: |
+        echo "$SSH_PRIVATE_KEY" > ssh_key
+        chmod 600 ssh_key
+        ssh -o StrictHostKeyChecking=no -i ssh_key $REMOTE_USER@$REMOTE_HOST << 'EOF'
+          pm2 stop all || true
+          cd ~/my-project
+          git pull origin master
+          yarn install
+          yarn build
+          pm2 start ecosystem.config.js --env production
+        EOF
